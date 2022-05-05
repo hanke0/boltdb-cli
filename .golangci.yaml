@@ -1,0 +1,76 @@
+linters-settings:
+  dupl:
+    threshold: 100
+  funlen:
+    lines: 120
+    statements: 80
+  gci:
+    local-prefixes: git.woa.com/video-telemetry/overload-protection
+  goconst:
+    min-len: 2
+    min-occurrences: 2
+  cyclop:
+    max-complexity: 15
+    skip-tests: true
+  goimports:
+    local-prefixes: git.woa.com/video-telemetry/overload-protection
+  gomnd:
+    settings:
+      mnd:
+        # don't include the "operation" and "assign"
+        checks: ["argument", "case", "condition", "return"]
+        ignored-numbers: 0,1,2,3
+        ignored-functions: strings.SplitN
+
+  govet:
+    check-shadowing: true
+  lll:
+    line-length: 140
+  misspell:
+    locale: US
+  nolintlint:
+    allow-leading-space: true # don't require machine-readable nolint directives (i.e. with no leading space)
+    allow-unused: false # report any unused nolint directives
+    require-explanation: false # don't require an explanation for nolint directives
+    require-specific: false # don't require nolint directives to be specific about which linter is being skipped
+
+linters:
+  disable-all: true
+  enable:
+    - asciicheck
+    - depguard
+    - dogsled
+    - durationcheck
+    - errcheck
+    - errorlint
+    - exportloopref
+    - gofmt
+    - goimports
+    - gosec
+    - misspell
+    - nakedret
+    - nilerr
+    - nolintlint
+    - revive
+    - wastedassign
+    - bidichk
+    - contextcheck
+    - cyclop
+    - dupl
+
+issues:
+  # Excluding configuration per-path, per-linter, per-text and per-source
+  exclude-rules:
+    - path: _test\.go
+      linters:
+        - gomnd
+        - dupl
+        - cyclop
+
+run:
+  timeout: 5m
+  skip-dirs:
+    - "tmp"
+  skip-files:
+    - "internal/proto/proto.go"
+  
