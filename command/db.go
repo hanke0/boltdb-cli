@@ -29,14 +29,14 @@ func NewRegisterWithDB(db *bolt.DB) Register {
 	})
 	r.Register(&dbCommand{
 		db:        db,
-		alias:     []string{"buckets", "bu"},
+		alias:     []string{"buckets", "b"},
 		help:      "List all buckets",
 		validates: NewValidats().NumArgs(0),
 		executor:  commandListBucket,
 	})
 	r.Register(&dbCommand{
 		db:        db,
-		alias:     []string{"keys", "bu"},
+		alias:     []string{"keys", "k"},
 		help:      "List all buckets",
 		validates: NewValidats().MinArgs(1).MaxArgs(2).Choices(1, []string{"withvalue"}),
 		executor:  commandListBucketKeys,
