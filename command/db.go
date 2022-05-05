@@ -83,23 +83,24 @@ func (g *dbCommand) Execute(ctx *Context, args []string) error {
 	return g.executor(g.db, ctx, args)
 }
 
+const (
+	maxRows         = 128
+	askContinueSize = 32
+)
+
 func commandStat(db *bolt.DB, ctx *Context, args []string) error {
 	var tab = table.Table{
-		Headers: []string{"bucket", "keys", "nested-buckets", "depth"},
+		Headers: []string{"keys", "bucket", "max-btree-depth"},
 	}
-	var total int64
-	var buckets int64
+	var total, buckets, maxDepth int64
 	err := db.View(func(tx *bolt.Tx) error {
 		return tx.ForEach(func(name []byte, b *bolt.Bucket) error {
 			s := b.Stats()
-			tab.Rows = append(tab.Rows, []string{
-				safeBytesToString(name),
-				fmt.Sprintf("%d", s.KeyN),
-				fmt.Sprintf("%d", s.BucketN),
-				fmt.Sprintf("%d", s.Depth),
-			})
 			total += int64(s.KeyN)
 			buckets++
+			if s.Depth > int(maxDepth) {
+				maxDepth = int64(s.Depth)
+			}
 			return nil
 		})
 	})
@@ -107,12 +108,13 @@ func commandStat(db *bolt.DB, ctx *Context, args []string) error {
 		return err
 	}
 	tab.Rows = append(tab.Rows, []string{
-		"-total-",
 		fmt.Sprintf("%d", total),
 		fmt.Sprintf("%d", buckets),
-		"-",
+		fmt.Sprintf("%d", maxDepth),
 	})
-	return tab.WriteTable(ctx.Output(), table.DefaultConfig())
+	cfg := table.DefaultConfig()
+	cfg.ShowIndex = false
+	return tab.WriteTable(ctx.Output(), cfg)
 }
 
 func commandGet(db *bolt.DB, ctx *Context, args []string) error {
@@ -158,22 +160,64 @@ func askContinue(ctx *Context) bool {
 	}
 }
 
+type tablePrinter struct {
+	tb    table.Table
+	total int
+}
+
+func (t *tablePrinter) add(ctx *Context, v []string) bool {
+	t.total++
+
+	r := []string{
+		fmt.Sprintf("%d", t.total),
+	}
+	r = append(r, v...)
+	t.tb.Rows = append(t.tb.Rows, r)
+	if t.total%askContinueSize == 0 && t.total >= askContinueSize {
+		t.out(ctx)
+		return askContinue(ctx)
+	}
+	return true
+}
+
+func (t *tablePrinter) out(ctx *Context) {
+	if len(t.tb.Rows) == 0 {
+		return
+	}
+	cfg := table.DefaultConfig()
+	cfg.ShowIndex = false
+	_ = t.tb.WriteTable(ctx.Output(), cfg)
+	t.tb.Rows = t.tb.Rows[:0]
+}
+
+func newTablePrinter(headers []string) *tablePrinter {
+	h := []string{"id"}
+	h = append(h, headers...)
+	return &tablePrinter{
+		tb: table.Table{
+			Headers: h,
+		},
+	}
+}
+
+var errExit = errors.New("exit")
+
 func commandListBucket(db *bolt.DB, ctx *Context, args []string) error {
-	var i int64
-	const askContinueSize = 32
-	var errExit = errors.New("exit")
+	tl := newTablePrinter([]string{"bucket", "keys", "depth"})
 	err := db.View(func(tx *bolt.Tx) error {
 		return tx.ForEach(func(name []byte, b *bolt.Bucket) error {
-			i++
-			ctx.Printf("%-8d %s\n", i, safeBytesToString(name))
-			if i%askContinueSize == 0 && i >= askContinueSize {
-				if !askContinue(ctx) {
-					return errExit
-				}
+			s := b.Stats()
+			if !tl.add(ctx, []string{
+				safeBytesToString(name),
+				fmt.Sprintf("%d", s.KeyN),
+				fmt.Sprintf("%d", s.Depth),
+			}) {
+				return errExit
 			}
 			return nil
 		})
 	})
+	tl.out(ctx)
 	if err == errExit { // nolint:errorlint
 		return nil
 	}
@@ -181,9 +225,14 @@ func commandListBucket(db *bolt.DB, ctx *Context, args []string) error {
 }
 
 func commandListBucketKeys(db *bolt.DB, ctx *Context, args []string) error {
-	var i int64
-	const askContinueSize = 32
-	var errExit = errors.New("exit")
+	hasValue := len(args) > 1
+	var tl *tablePrinter
+	if hasValue {
+		tl = newTablePrinter([]string{"key", "value"})
+	} else {
+		tl = newTablePrinter([]string{"key"})
+	}
+
 	err := db.View(func(tx *bolt.Tx) error {
 		bu := tx.Bucket(stringToBytes(args[0]))
 		if bu == nil {
@@ -191,20 +240,17 @@ func commandListBucketKeys(db *bolt.DB, ctx *Context, args []string) error {
 			return nil
 		}
 		return bu.ForEach(func(k, v []byte) error {
-			i++
-			if len(args) > 1 {
-				ctx.Printf("%-8d %s  %s\n", i, safeBytesToString(k), safeBytesToString(v))
-			} else {
-				ctx.Printf("%-8d %s\n", i, safeBytesToString(k))
+			r := []string{safeBytesToString(v)}
+			if hasValue {
+				r = append(r, safeBytesToString(v))
 			}
-			if i%askContinueSize == 0 && i >= askContinueSize {
-				if !askContinue(ctx) {
-					return errExit
-				}
+			if !tl.add(ctx, r) {
+				return errExit
 			}
 			return nil
 		})
 	})
+	tl.out(ctx)
 	if err == errExit { // nolint:errorlint
 		return nil
 	}
