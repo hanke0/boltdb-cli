@@ -41,6 +41,27 @@ func NewRegisterWithDB(db *bolt.DB) Register {
 		validates: NewValidats().MinArgs(1).MaxArgs(2).Choices(1, []string{"withvalue"}),
 		executor:  commandListBucketKeys,
 	})
+	r.Register(&dbCommand{
+		db:        db,
+		alias:     []string{"remove", "rm"},
+		help:      "Remove bucket or keys",
+		validates: NewValidats().MinArgs(2).Choices(0, []string{"bucket", "key"}),
+		executor:  commandRemove,
+	})
+	r.Register(&dbCommand{
+		db:        db,
+		alias:     []string{"copy-bucket", "cpbkt"},
+		help:      "Copy bucket to anthoer bucket. Usage: copy-bucket dst src",
+		validates: NewValidats().NumArgs(2),
+		executor:  commandRemove,
+	})
+	r.Register(&dbCommand{
+		db:        db,
+		alias:     []string{"set", "s"},
+		help:      "Set key-value pairs. Usage: set bucket key value",
+		validates: NewValidats().NumArgs(3),
+		executor:  commandSet,
+	})
 	return r
 }
 
@@ -255,4 +276,63 @@ func commandListBucketKeys(db *bolt.DB, ctx *Context, args []string) error {
 		return nil
 	}
 	return err
+}
+
+func commandCopyBucket(db *bolt.DB, ctx *Context, args []string) error {
+	dst, src := args[0], args[1]
+	return db.Update(func(tx *bolt.Tx) error {
+		s := tx.Bucket(stringToBytes(src))
+		if s == nil {
+			return nil
+		}
+		d, err := tx.CreateBucketIfNotExists(stringToBytes(dst))
+		if err != nil {
+			return err
+		}
+		return s.ForEach(func(k, v []byte) error {
+			return d.Put(k, v)
+		})
+	})
+}
+
+func commandRemove(db *bolt.DB, ctx *Context, args []string) error {
+	if args[0] == "key" {
+		if len(args) < 3 {
+			return fmt.Errorf("remove a key must provides bucket and key")
+		}
+		bucket := stringToBytes(args[1])
+		return db.Update(func(tx *bolt.Tx) error {
+			bu := tx.Bucket(bucket)
+			if bu == nil {
+				return nil
+			}
+			for _, v := range args[2:] {
+				if err := bu.Delete(stringToBytes(v)); err != nil {
+					return err
+				}
+			}
+			return nil
+		})
+	}
+	if len(args) < 2 {
+		return fmt.Errorf("remove a bucket must provides bucket name")
+	}
+	return db.Update(func(tx *bolt.Tx) error {
+		for _, v := range args[1:] {
+			if err := tx.DeleteBucket(stringToBytes(v)); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+}
+
+func commandSet(db *bolt.DB, ctx *Context, args []string) error {
+	return db.Update(func(tx *bolt.Tx) error {
+		b, err := tx.CreateBucketIfNotExists(stringToBytes(args[0]))
+		if err != nil {
+			return err
+		}
+		return b.Put(stringToBytes(args[1]), stringToBytes(args[2]))
+	})
 }

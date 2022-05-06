@@ -1,6 +1,8 @@
 package command
 
-import "fmt"
+import (
+	"fmt"
+)
 
 type ValidateFunc func(ctx *Context, args []string) error
 
@@ -50,6 +52,17 @@ func (v Validates) MinArgs(n int) Validates {
 			return fmt.Errorf("expect minimum %d arguments, got %d", n, len(args))
 		}
 		return nil
+	})
+}
+
+func (v Validates) NumArgsChoice(n ...int) Validates {
+	return v.Append(func(ctx *Context, args []string) error {
+		for _, v := range n {
+			if v == len(args) {
+				return nil
+			}
+		}
+		return fmt.Errorf("expect %+v arguments, got %d", n, len(args))
 	})
 }
 
