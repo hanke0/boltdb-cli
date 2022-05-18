@@ -79,7 +79,7 @@ func NewRegisterWithDB(db *bolt.DB) Register {
 	return r
 }
 
-func safeBytesToString(b []byte) string {
+func bytesToString(b []byte) string {
 	a := fmt.Sprintf("%q", b)
 	r := strings.NewReplacer("\n", "\\x0a", "\r", "\\x0d", "\\\"", "\"", "\"", "")
 	return r.Replace(a)
@@ -180,7 +180,7 @@ func commandGet(db *bolt.DB, ctx *Context, args []string) error {
 		if v == nil {
 			ctx.Printf("err: key-value not found\n")
 		} else {
-			ctx.Printf(safeBytesToString(v))
+			ctx.Printf(bytesToString(v))
 		}
 		return nil
 	})
@@ -251,7 +251,7 @@ func commandListBucket(db *bolt.DB, ctx *Context, args []string) error {
 		return tx.ForEach(func(name []byte, b *bolt.Bucket) error {
 			s := b.Stats()
 			if !tl.add(ctx, []string{
-				safeBytesToString(name),
+				bytesToString(name),
 				fmt.Sprintf("%d", s.KeyN),
 				fmt.Sprintf("%d", s.Depth),
 			}) {
@@ -283,9 +283,9 @@ func commandListBucketKeys(db *bolt.DB, ctx *Context, args []string) error {
 			return nil
 		}
 		return bu.ForEach(func(k, v []byte) error {
-			r := []string{safeBytesToString(v)}
+			r := []string{bytesToString(v)}
 			if hasValue {
-				r = append(r, safeBytesToString(v))
+				r = append(r, bytesToString(v))
 			}
 			if !tl.add(ctx, r) {
 				return errExit
