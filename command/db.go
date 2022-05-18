@@ -1,6 +1,7 @@
 package command
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"regexp"
@@ -66,6 +67,14 @@ func NewRegisterWithDB(db *bolt.DB) Register {
 		usage:     "set <bucket> <key> <value>",
 		validates: NewValidats().NumArgs(3),
 		executor:  commandSet,
+	})
+	r.Register(&dbCommand{
+		db:        db,
+		alias:     []string{"merge-all-buckets-into-one"},
+		help:      "Merges all buckets data into one bucket",
+		usage:     "merge-all-buckets-into-one <bucket-name>",
+		validates: NewValidats().NumArgs(1),
+		executor:  commandMergeAllBucketIntoOne,
 	})
 	return r
 }
@@ -347,5 +356,44 @@ func commandSet(db *bolt.DB, ctx *Context, args []string) error {
 			return err
 		}
 		return b.Put(stringToBytes(args[1]), stringToBytes(args[2]))
+	})
+}
+
+func commandMergeAllBucketIntoOne(db *bolt.DB, ctx *Context, args []string) error {
+	var buckets [][]byte
+	err := db.View(func(tx *bolt.Tx) error {
+		return tx.ForEach(func(name []byte, b *bolt.Bucket) error {
+			buckets = append(buckets, name)
+			return nil
+		})
+	})
+	dest := stringToBytes(args[0])
+	if err != nil {
+		return err
+	}
+	return db.Update(func(tx *bolt.Tx) error {
+		d, err := tx.CreateBucketIfNotExists(dest)
+		if err != nil {
+			return err
+		}
+		for _, b := range buckets {
+			if bytes.Equal(dest, b) {
+				continue
+			}
+			bu := tx.Bucket(b)
+			if bu == nil {
+				continue
+			}
+			err := bu.ForEach(func(k, v []byte) error {
+				return d.Put(k, v)
+			})
+			if err != nil {
+				return err
+			}
+			if err := tx.DeleteBucket(b); err != nil {
+				return err
+			}
+		}
+		return nil
 	})
 }
