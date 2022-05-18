@@ -32,4 +32,4 @@ tmp/
 /cover.out
 *.out
 *.test
-boltdb-cli
+boltdb-cli*
