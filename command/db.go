@@ -71,7 +71,7 @@ func NewRegisterWithDB(db *bolt.DB) Register {
 	r.Register(&dbCommand{
 		db:        db,
 		alias:     []string{"merge-all-buckets-into-one"},
-		help:      "Merges all buckets data into one bucket",
+		help:      "Merges all buckets data into one bucket, keep only one bucket when this command success.",
 		usage:     "merge-all-buckets-into-one <bucket-name>",
 		validates: NewValidats().NumArgs(1),
 		executor:  commandMergeAllBucketIntoOne,
