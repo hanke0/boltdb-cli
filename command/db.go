@@ -55,7 +55,7 @@ func NewRegisterWithDB(db *bolt.DB) Register {
 	r.Register(&dbCommand{
 		db:        db,
 		alias:     []string{"copy-bucket", "cpbkt"},
-		help:      "Copy bucket to anthoer bucket",
+		help:      "Copy bucket to another bucket",
 		usage:     "copy-bucket <dst> <src>",
 		validates: NewValidats().NumArgs(2),
 		executor:  commandRemove,
