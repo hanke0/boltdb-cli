@@ -341,7 +341,7 @@ func commandListBucketKeys(db *bolt.DB, ctx *Context, args []string) error {
 			if !match.Match(k) {
 				return nil
 			}
-			r := []string{bytesToString(v)}
+			r := []string{bytesToString(k)}
 			if withValue {
 				r = append(r, bytesToString(v))
 			}
