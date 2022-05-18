@@ -33,15 +33,16 @@ func NewRegisterWithDB(db *bolt.DB) Register {
 		db:        db,
 		alias:     []string{"buckets", "b"},
 		help:      "List all buckets",
-		validates: NewValidats().NumArgs(0),
+		usage:     "buckets [pattern]",
+		validates: NewValidats().MaxArgs(1),
 		executor:  commandListBucket,
 	})
 	r.Register(&dbCommand{
 		db:        db,
 		alias:     []string{"keys", "k"},
 		help:      "List a bucket all keys",
-		usage:     "keys <bucket-name> [withvalue]",
-		validates: NewValidats().MinArgs(1).MaxArgs(2).Choices(1, []string{"withvalue"}),
+		usage:     "keys <bucket-name> [pattern] [withvalue]",
+		validates: NewValidats().MinArgs(1).MaxArgs(3),
 		executor:  commandListBucketKeys,
 	})
 	r.Register(&dbCommand{
@@ -92,6 +93,28 @@ func stringToBytes(s string) []byte {
 		a, _ := strconv.ParseUint(string(b[2:]), 16, 8)
 		return []byte{byte(a)}
 	})
+}
+
+type matcher struct {
+	re *regexp.Regexp
+}
+
+func newMatcher(pattern string) (*matcher, error) {
+	if pattern == "" {
+		return &matcher{}, nil
+	}
+	re, err := regexp.Compile(pattern)
+	if err != nil {
+		return nil, errors.New("bad pattern synta")
+	}
+	return &matcher{re: re}, nil
+}
+
+func (m *matcher) Match(b []byte) bool {
+	if m.re == nil {
+		return true
+	}
+	return m.re.Match(b)
 }
 
 type dbCommand struct {
@@ -247,8 +270,19 @@ var errExit = errors.New("exit")
 
 func commandListBucket(db *bolt.DB, ctx *Context, args []string) error {
 	tl := newTablePrinter([]string{"bucket", "keys", "depth"})
-	err := db.View(func(tx *bolt.Tx) error {
+	var pattern string
+	if len(args) == 1 {
+		pattern = args[0]
+	}
+	match, err := newMatcher(pattern)
+	if err != nil {
+		return err
+	}
+	err = db.View(func(tx *bolt.Tx) error {
 		return tx.ForEach(func(name []byte, b *bolt.Bucket) error {
+			if !match.Match(name) {
+				return nil
+			}
 			s := b.Stats()
 			if !tl.add(ctx, []string{
 				bytesToString(name),
@@ -268,23 +302,47 @@ func commandListBucket(db *bolt.DB, ctx *Context, args []string) error {
 }
 
 func commandListBucketKeys(db *bolt.DB, ctx *Context, args []string) error {
-	hasValue := len(args) > 1
+	var withValue bool
+	var pattern string
+	switch len(args) {
+	case 2:
+		if args[1] == "withvalue" {
+			withValue = true
+		} else {
+			pattern = args[1]
+		}
+	case 3:
+		withValue = true
+		if args[1] == "withvalue" {
+			pattern = args[2]
+		} else if args[2] == "withvalue" {
+			pattern = args[1]
+		}
+	default:
+	}
+	match, err := newMatcher(pattern)
+	if err != nil {
+		return err
+	}
 	var tl *tablePrinter
-	if hasValue {
+	if withValue {
 		tl = newTablePrinter([]string{"key", "value"})
 	} else {
 		tl = newTablePrinter([]string{"key"})
 	}
 
-	err := db.View(func(tx *bolt.Tx) error {
+	err = db.View(func(tx *bolt.Tx) error {
 		bu := tx.Bucket(stringToBytes(args[0]))
 		if bu == nil {
 			ctx.Printf("err: bucket not found")
 			return nil
 		}
 		return bu.ForEach(func(k, v []byte) error {
+			if !match.Match(k) {
+				return nil
+			}
 			r := []string{bytesToString(v)}
-			if hasValue {
+			if withValue {
 				r = append(r, bytesToString(v))
 			}
 			if !tl.add(ctx, r) {
