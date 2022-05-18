@@ -46,14 +46,10 @@ func NewContext() *Context {
 }
 
 func (ctx *Context) Close() error {
-	_, err := ctx.WriteHistory()
-	if err != nil {
-		ctx.Printf("write history fails: %v", err)
-	}
 	return ctx.line.Close()
 }
 
-func (ctx *Context) Commmad() string {
+func (ctx *Context) Command() string {
 	return ctx.command
 }
 
@@ -76,10 +72,10 @@ func (ctx *Context) Next() bool {
 }
 
 func (ctx *Context) Do(c Commands) {
-	if err := c.Execute(ctx, ctx.Commmad()); err != nil {
+	if err := c.Execute(ctx, ctx.Command()); err != nil {
 		ctx.Fatalf("error: %v\n", err)
 	}
-	ctx.line.AppendHistory(ctx.Commmad())
+	ctx.line.AppendHistory(ctx.Command())
 }
 
 func (ctx *Context) ReadLine(prompt string) (string, error) {

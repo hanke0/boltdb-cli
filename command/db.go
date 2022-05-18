@@ -24,6 +24,7 @@ func NewRegisterWithDB(db *bolt.DB) Register {
 		db:        db,
 		alias:     []string{"get", "g"},
 		help:      "Get key-value pairs",
+		usage:     "get <bucket-name> [nest-bucket-name...] <key>",
 		validates: NewValidats().MinArgs(2).MaxArgs(1024),
 		executor:  commandGet,
 	})
@@ -38,6 +39,7 @@ func NewRegisterWithDB(db *bolt.DB) Register {
 		db:        db,
 		alias:     []string{"keys", "k"},
 		help:      "List all buckets",
+		usage:     "keys <bucket-name> [withvalue]",
 		validates: NewValidats().MinArgs(1).MaxArgs(2).Choices(1, []string{"withvalue"}),
 		executor:  commandListBucketKeys,
 	})
@@ -45,20 +47,23 @@ func NewRegisterWithDB(db *bolt.DB) Register {
 		db:        db,
 		alias:     []string{"remove", "rm"},
 		help:      "Remove bucket or keys",
+		usage:     "remove bucket|key [bucket-name] [key]",
 		validates: NewValidats().MinArgs(2).Choices(0, []string{"bucket", "key"}),
 		executor:  commandRemove,
 	})
 	r.Register(&dbCommand{
 		db:        db,
 		alias:     []string{"copy-bucket", "cpbkt"},
-		help:      "Copy bucket to anthoer bucket. Usage: copy-bucket dst src",
+		help:      "Copy bucket to anthoer bucket",
+		usage:     "copy-bucket <dst> <src>",
 		validates: NewValidats().NumArgs(2),
 		executor:  commandRemove,
 	})
 	r.Register(&dbCommand{
 		db:        db,
 		alias:     []string{"set", "s"},
-		help:      "Set key-value pairs. Usage: set bucket key value",
+		help:      "Set key-value pairs",
+		usage:     "set <bucket> <key> <value>",
 		validates: NewValidats().NumArgs(3),
 		executor:  commandSet,
 	})
@@ -85,6 +90,7 @@ type dbCommand struct {
 	help      string
 	alias     []string
 	validates Validates
+	usage     string
 	executor  func(db *bolt.DB, ctx *Context, args []string) error
 }
 
@@ -102,6 +108,13 @@ func (g *dbCommand) Check(ctx *Context, args []string) error {
 
 func (g *dbCommand) Execute(ctx *Context, args []string) error {
 	return g.executor(g.db, ctx, args)
+}
+
+func (g *dbCommand) Usage() string {
+	if g.usage != "" {
+		return g.help + ".\nUsage: " + g.usage
+	}
+	return g.help
 }
 
 const (
